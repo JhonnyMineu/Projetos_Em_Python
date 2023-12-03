@@ -1,8 +1,16 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
+from sqlalchemy import create_engine
+
+# Dicionário para converter os nomes coletados no site da nfl para o nome das tabelas do banco de dados
+dicionario_tabelas = {'Passing': 'Passing', 'Receiving': 'Receiving', 'Rushing': 'Rushing', 'Fumbles': 'Fumbles',
+                      'Tackles': 'Tackles', 'Interceptions': 'Interceptions', 'Field Goals': 'Field Goals', 'Kickoffs': 'Kickoffs',
+                      'Kickoff Returns': 'Kickoff Returns', 'Punting': 'Punting', 'Punt Returns': 'Punt Returns'}
 
 
+# Estabelecendo conexão com o banco de dados
+engine = create_engine('mysql+mysqlconnector://root:uUpQ`a>;=[RAB%<I@35.198.48.40/NFL_Dados')
 
 # Pegar todos os links de categorias
 
@@ -12,10 +20,14 @@ soup = BeautifulSoup(site.content,'html.parser')
 
 categorias = soup.find('ul',{'class':'d3-o-tabs d3-o-tabs__nowrap'})
 
-    # lista para armazenar os nomes dos botões e links das categorias
+# listas para armazenar os nomes dos botões e links das categorias
 referencias = []
 botoes = []
 links = []
+
+# Listas para armazenar o nome das tabelas e colunas do banco de dados
+tabelas_banco = []
+colunas_tabela = []
 
     # loop para pegar os textos dos botões de categorias
 for i in categorias:
@@ -41,14 +53,13 @@ for link in soup.find_all('a',string=['Passing', 'Rushing', 'Receiving', 'Fumble
     # print(link.get('href'))
     links.append(link.get('href'))
 
-
-print(links)
 # Pegar todos os links de 'próxima página' da categoria atual
 
 for ref in range(0, len(links)):
     url = 'https://www.nfl.com' + links[ref]
 
     abas = [url]
+
     # Função para percorrer as páginas até a última
     def proximapagina(soup):
         paginas = soup.find('a', {'class': 'nfl-o-table-pagination__next'})
@@ -70,7 +81,6 @@ for ref in range(0, len(links)):
         abas.append(url)
 
 
-# Até aqui tá OK
     for contador in range(0,len(abas)):
         url = abas[contador]
         site = requests.get(url)
@@ -84,7 +94,7 @@ for ref in range(0, len(links)):
     site = requests.get(url)
     soup = BeautifulSoup(site.content,'html.parser')
 
-    print(abas)
+
     lista = []
     nomes_co = []
 
@@ -95,11 +105,12 @@ for ref in range(0, len(links)):
         lista.append(i.get_text().strip())
         nomes_co.append(i.get_text().strip())
 
-    print(lista)
-
     # Obtendo o nome da página para criar um DataFrame de forma automática
     pagina = soup.find('li',{'class':'d3-o-tabs__list-item d3-is-active'})
-    DF_pagina = pagina.get_text()
+    DF_pagina = pagina.get_text().strip()
+
+    # Nome da tabela no banco de dados
+    nome_tabela = DF_pagina
 
     df = pd.DataFrame(columns=nomes_co)
 
@@ -110,8 +121,6 @@ for ref in range(0, len(links)):
     for numero in range(0,len(abas)):
         # Pegar todas as linhas das tabelas de cada url da lista 'próxima página'
         # Criando loop para colocar as informações do cabeçalho da tabela dentro de uma lista
-
-
 
         url = abas[numero]
         site = requests.get(url)
@@ -134,8 +143,13 @@ for ref in range(0, len(links)):
 
             # Condicional para só inputar no DataFrame quando a quantidade de colunas existentes estiver igual a de colunas coletadas
                     if i == (len(nomes_co)-1):
-                        df= pd.concat([df,pd.DataFrame.from_records([valores_coletados])], ignore_index=True) # Input no DataFrame
+                        df = pd.concat([df,pd.DataFrame.from_records([valores_coletados])], ignore_index=True) # Input no DataFrame
                         nome = 'Nfl_dados' + str(ref)
                         df.to_csv(nome)
+                        # Inserindo dados dentro do banco de dados
+                        with engine.connect() as connection:
+                            df.to_sql(dicionario_tabelas[nome_tabela], con=engine, if_exists='replace', index=False)
+    print(df.head(10))
 
-
+# Fechando conexão como banco de dados
+engine.dispose()

@@ -147,9 +147,16 @@ for ref in range(0, len(links)):
                         nome = 'Nfl_dados' + str(ref)
                         df.to_csv(nome)
                         # Inserindo dados dentro do banco de dados
-                        with engine.connect() as connection:
-                            df.to_sql(dicionario_tabelas[nome_tabela], con=engine, if_exists='replace', index=False)
-    print(df.head(10))
+                        try:
+                            with engine.connect() as connection:
+                                df.to_sql(dicionario_tabelas[nome_tabela], con=engine, if_exists='replace', index=False)
+                                connection.commit()
+                        except Exception as e:
+                            print(f"Erro ao inserir dados no banco de dados: {e}")
+                            connection.rollback()
+                        finally:
+                            connection.close()
+                            print(df.head(10))
 
 # Fechando conexão como banco de dados
 engine.dispose()
